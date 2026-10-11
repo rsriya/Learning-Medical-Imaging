@@ -1,0 +1,422 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "2a1c6262-9f94-4449-ae63-a861e1d3209b",
+   "metadata": {},
+   "source": [
+    "## Manipulating 1 parquet file"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 56,
+   "id": "dd0da5b5-4fcd-4545-a7b5-5fb9eaf23b27",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pyarrow.parquet as pq\n",
+    "import random\n",
+    "import os"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "4db51f2b-6aa9-4024-9ff2-2182e07f4138",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "<pyarrow._parquet.FileMetaData object at 0x000001EFEEBA0770>\n",
+       "  created_by: parquet-cpp-arrow version 24.0.0\n",
+       "  num_columns: 7\n",
+       "  num_rows: 18687\n",
+       "  num_row_groups: 5\n",
+       "  format_version: 2.6\n",
+       "  serialized_size: 5723"
+      ]
+     },
+     "execution_count": 3,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "parquet_file = pq.ParquetFile(r'data\\data\\train-00000-of-00006.parquet')\n",
+    "parquet_file.metadata"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "1543e58d-141a-4bbb-b345-662019750baa",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "<pyarrow._parquet.ParquetSchema object at 0x000001EFEEBE49C0>\n",
+       "required group field_id=-1 schema {\n",
+       "  optional binary field_id=-1 patient_id (String);\n",
+       "  optional int32 field_id=-1 scan_id;\n",
+       "  optional group field_id=-1 image {\n",
+       "    optional binary field_id=-1 bytes;\n",
+       "    optional binary field_id=-1 path (String);\n",
+       "  }\n",
+       "  optional int32 field_id=-1 age;\n",
+       "  optional binary field_id=-1 sex (String);\n",
+       "  optional group field_id=-1 labels (List) {\n",
+       "    repeated group field_id=-1 list {\n",
+       "      optional int32 field_id=-1 element;\n",
+       "    }\n",
+       "  }\n",
+       "}"
+      ]
+     },
+     "execution_count": 4,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "parquet_file.schema"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 73,
+   "id": "b1cd91be-4931-443b-9fc5-846b525dc81c",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "pyarrow.Table\n",
+       "patient_id: string\n",
+       "labels: list<element: int32>\n",
+       "  child 0, element: int32\n",
+       "----\n",
+       "patient_id: [[\"1\",\"1\",\"1\",\"2\",\"3\",...,\"1204\",\"1204\",\"1205\",\"1205\",\"1205\"],[\"1205\",\"1205\",\"1205\",\"1205\",\"1205\",...,\"2345\",\"2346\",\"2347\",\"2348\",\"2348\"],...,[\"3470\",\"3471\",\"3472\",\"3473\",\"3474\",...,\"4808\",\"4808\",\"4808\",\"4808\",\"4808\"],[\"4808\",\"4808\",\"4808\",\"4808\",\"4808\",...,\"4959\",\"4959\",\"4960\",\"4960\",\"4960\"]]\n",
+       "labels: [[[2],[2,11],...,[0],[14,4]],[[14],[0],...,[0],[0]],...,[[5],[0],...,[4],[0]],[[0],[0],...,[0],[0]]]"
+      ]
+     },
+     "execution_count": 73,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "path = r'data\\data\\train-00000-of-00006.parquet'\n",
+    "table = pq.read_table(path, columns=[\"patient_id\", \"labels\"])\n",
+    "table"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 74,
+   "id": "33382e8c-fdb1-4375-8240-1f47525a4011",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "patient_ids = table[\"patient_id\"].to_pylist()\n",
+    "labels_list = table[\"labels\"].to_pylist()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 79,
+   "id": "d5f57532-6ee7-41c9-bbc4-d7cf224c4dc4",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "162\n",
+      "4960\n",
+      "4798\n",
+      "3967 496 497\n"
+     ]
+    }
+   ],
+   "source": [
+    "#https://huggingface.co/datasets/chehablab/NIHChestXR/blob/main/README.md\n",
+    "#Pneumonia is 7\n",
+    "random.seed(42)\n",
+    "patient_ids_pneumonia = [patient_id for patient_id, labels in zip(patient_ids, labels_list) if 7 in labels]\n",
+    "patient_ids_pneumonia = sorted(set(patient_ids_pneumonia))\n",
+    "print(len(patient_ids_pneumonia))\n",
+    "unique_ids = sorted(set(patient_ids))\n",
+    "print(len(unique_ids))\n",
+    "patient_ids_nopneumonia = list(set(unique_ids) - set(patient_ids_pneumonia))\n",
+    "print(len(patient_ids_nopneumonia))\n",
+    "random.shuffle(patient_ids_nopneumonia)\n",
+    "random.shuffle(patient_ids_pneumonia)\n",
+    "patient_ids_train = patient_ids_nopneumonia[:int(len(patient_ids_nopneumonia)*0.8)] + patient_ids_pneumonia[:int(len(patient_ids_pneumonia)*0.8)]\n",
+    "patient_ids_val = patient_ids_nopneumonia[int(len(patient_ids_nopneumonia)*0.8):int(len(patient_ids_nopneumonia)*0.9)] + patient_ids_pneumonia[int(len(patient_ids_pneumonia)*0.8):int(len(patient_ids_pneumonia)*0.9)]\n",
+    "patient_ids_test = patient_ids_nopneumonia[int(len(patient_ids_nopneumonia)*0.9):] + patient_ids_pneumonia[int(len(patient_ids_pneumonia)*0.9):]\n",
+    "print(len(train), len(val), len(test))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 80,
+   "id": "afede871-e2bf-4934-b817-f13d860a0389",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Train-validation overlap: 0\n",
+      "Train-test overlap: 0\n",
+      "Validation-test overlap: 0\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"Train-validation overlap:\", len(set(patient_ids_train) & set(patient_ids_val)))\n",
+    "print(\"Train-test overlap:\", len(set(patient_ids_train) & set(patient_ids_test)))\n",
+    "print(\"Validation-test overlap:\", len(set(patient_ids_val) & set(patient_ids_test)))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 89,
+   "id": "013a11b7-3242-4e4b-a65b-7002ba196882",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "patient_ids_train = set(patient_ids_train)\n",
+    "patient_ids_val = set(patient_ids_val)\n",
+    "patient_ids_test = set(patient_ids_test)\n",
+    "train_data = []\n",
+    "val_data=[]\n",
+    "test_data = []\n",
+    "for i, (patient_id, labels) in enumerate(\n",
+    "        zip(patient_ids, labels_list)\n",
+    "    ):\n",
+    "    if patient_id is None:\n",
+    "        raise ValueError(f\"Missing patient ID in {file.name}, row {i}\")\n",
+    "    pneumonia = int(7 in labels)\n",
+    "    row = {\n",
+    "            \"row_index\": i,\n",
+    "            \"patient_id\": patient_id,\n",
+    "            \"pneumonia\": pneumonia,\n",
+    "        }\n",
+    "    if patient_id in patient_ids_train:\n",
+    "        train_data.append(row)\n",
+    "    elif patient_id in patient_ids_val:\n",
+    "        val_data.append(row)\n",
+    "    elif patient_id in patient_ids_test:\n",
+    "        test_data.append(row)\n",
+    "    else:\n",
+    "        raise ValueError(f\"Patient {patient_id} is not assigned to a split\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "fce08fd8-c0c9-4a77-88d1-97ddb82ea31c",
+   "metadata": {},
+   "source": [
+    "## Manipulating all six files"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0e0cc14b-04b4-416f-920e-2b31fceaa1ff",
+   "metadata": {},
+   "source": [
+    "Your split assigns patients to sets, but it doesn't yet assign their images to those sets. In the next step, we'll create image-level metadata across all six shards, including each image's patient ID, pneumonia label, shard filename, and row index. Then we can use the patient lists to determine which split each image belongs to."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 97,
+   "id": "bb7c91d6-7832-41b7-a226-bb43be49b0d8",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "1008\n",
+      "30805\n",
+      "29797\n",
+      "24643 3081 3081\n",
+      "Train-validation overlap: 0\n",
+      "Train-test overlap: 0\n",
+      "Validation-test overlap: 0\n"
+     ]
+    }
+   ],
+   "source": [
+    "data_dir = r'data\\data'\n",
+    "parquet_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith(\".parquet\")]\n",
+    "random.seed(42)\n",
+    "\n",
+    "patient_ids_pneumonia = []\n",
+    "unique_ids = []\n",
+    "for file in parquet_files:\n",
+    "    table = pq.read_table(\n",
+    "        file,\n",
+    "        columns=[\"patient_id\", \"labels\"]\n",
+    "    )\n",
+    "    patient_ids = table[\"patient_id\"].to_pylist()\n",
+    "    labels_list = table[\"labels\"].to_pylist()\n",
+    "    patient_ids_pneumonia = patient_ids_pneumonia + list(set([patient_id for patient_id, labels in zip(patient_ids, labels_list) if 7 in labels]))\n",
+    "    unique_ids = unique_ids + list(set(patient_ids))\n",
+    "patient_ids_pneumonia = sorted(set(patient_ids_pneumonia))\n",
+    "unique_ids = sorted(set(unique_ids))\n",
+    "print(len(patient_ids_pneumonia))\n",
+    "print(len(unique_ids))\n",
+    "patient_ids_nopneumonia = sorted(set(unique_ids) - set(patient_ids_pneumonia))\n",
+    "print(len(patient_ids_nopneumonia))\n",
+    "random.shuffle(patient_ids_nopneumonia)\n",
+    "random.shuffle(patient_ids_pneumonia)\n",
+    "patient_ids_train = patient_ids_nopneumonia[:int(len(patient_ids_nopneumonia)*0.8)] + patient_ids_pneumonia[:int(len(patient_ids_pneumonia)*0.8)]\n",
+    "patient_ids_val = patient_ids_nopneumonia[int(len(patient_ids_nopneumonia)*0.8):int(len(patient_ids_nopneumonia)*0.9)] + patient_ids_pneumonia[int(len(patient_ids_pneumonia)*0.8):int(len(patient_ids_pneumonia)*0.9)]\n",
+    "patient_ids_test = patient_ids_nopneumonia[int(len(patient_ids_nopneumonia)*0.9):] + patient_ids_pneumonia[int(len(patient_ids_pneumonia)*0.9):]\n",
+    "print(len(patient_ids_train), len(patient_ids_val), len(patient_ids_test))\n",
+    "\n",
+    "print(\"Train-validation overlap:\", len(set(patient_ids_train) & set(patient_ids_val)))\n",
+    "print(\"Train-test overlap:\", len(set(patient_ids_train) & set(patient_ids_test)))\n",
+    "print(\"Validation-test overlap:\", len(set(patient_ids_val) & set(patient_ids_test)))\n",
+    "\n",
+    "patient_ids_train = set(patient_ids_train)\n",
+    "patient_ids_val = set(patient_ids_val)\n",
+    "patient_ids_test = set(patient_ids_test)\n",
+    "train_data = []\n",
+    "val_data=[]\n",
+    "test_data = []\n",
+    "for file in parquet_files:\n",
+    "    table = pq.read_table(\n",
+    "        file,\n",
+    "        columns=[\"patient_id\", \"labels\"]\n",
+    "    )\n",
+    "    patient_ids = table[\"patient_id\"].to_pylist()\n",
+    "    labels_list = table[\"labels\"].to_pylist()\n",
+    "    for i, (patient_id, labels) in enumerate(\n",
+    "            zip(patient_ids, labels_list)\n",
+    "        ):\n",
+    "        if patient_id is None:\n",
+    "            raise ValueError(f\"Missing patient ID in {os.path.basename(file)}, row {i}\")\n",
+    "        pneumonia = int(7 in labels)\n",
+    "        row = {\n",
+    "                \"shard\": os.path.basename(file),\n",
+    "                \"row_index\": i,\n",
+    "                \"patient_id\": patient_id,\n",
+    "                \"pneumonia\": pneumonia,\n",
+    "            }\n",
+    "        if patient_id in patient_ids_train:\n",
+    "            train_data.append(row)\n",
+    "        elif patient_id in patient_ids_val:\n",
+    "            val_data.append(row)\n",
+    "        elif patient_id in patient_ids_test:\n",
+    "            test_data.append(row)\n",
+    "        else:\n",
+    "            raise ValueError(f\"Patient {patient_id} is not assigned to a split\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 98,
+   "id": "7787d4fa-d80c-413e-a5f1-23510ead7d3a",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Train images: 90256\n",
+      "Validation images: 10923\n",
+      "Test images: 10941\n",
+      "Total images: 112120\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"Train images:\", len(train_data))\n",
+    "print(\"Validation images:\", len(val_data))\n",
+    "print(\"Test images:\", len(test_data))\n",
+    "print(\"Total images:\", len(train_data) + len(val_data) + len(test_data))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 99,
+   "id": "d6cb0128-9921-4a3d-a00c-69d5183a2f78",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Patient-level leakage check passed.\n"
+     ]
+    }
+   ],
+   "source": [
+    "train_patients = {row[\"patient_id\"] for row in train_data}\n",
+    "val_patients = {row[\"patient_id\"] for row in val_data}\n",
+    "test_patients = {row[\"patient_id\"] for row in test_data}\n",
+    "\n",
+    "assert train_patients.isdisjoint(val_patients)\n",
+    "assert train_patients.isdisjoint(test_patients)\n",
+    "assert val_patients.isdisjoint(test_patients)\n",
+    "\n",
+    "print(\"Patient-level leakage check passed.\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 100,
+   "id": "49b81868-3c15-4681-9ecd-db0e8a0bb2d6",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "os.makedirs(\"metadata\", exist_ok=True)\n",
+    "\n",
+    "train_df = pd.DataFrame(train_data)\n",
+    "val_df = pd.DataFrame(val_data)\n",
+    "test_df = pd.DataFrame(test_data)\n",
+    "\n",
+    "train_df.to_csv(\"metadata/train.csv\", index=False)\n",
+    "val_df.to_csv(\"metadata/val.csv\", index=False)\n",
+    "test_df.to_csv(\"metadata/test.csv\", index=False)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "d348af78-92dc-48a5-8086-6a5039edf89e",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.13.9"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
