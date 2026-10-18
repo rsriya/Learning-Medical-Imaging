@@ -62,5 +62,3 @@ curl.exe --ssl-revoke-best-effort -L -C - -o train-00004-of-00006.parquet "https
 curl.exe --ssl-revoke-best-effort -L -C - -o train-00005-of-00006.parquet "https://huggingface.co/datasets/chehablab/NIHChestXR/resolve/main/data/train-00005-of-00006.parquet"
 ```
 **Note:** Run the directory commands from the project root. If `data\data` already exists, you can skip the `mkdir` command.
-
-rain-00005-of-00006.parquet"
