@@ -6,10 +6,11 @@ from io import BytesIO
 import torch
 
 class ChestXrayDataset(Dataset):
-    def __init__(self, dataframe, data_dir, transform=None):
+    def __init__(self, dataframe, data_dir, transform=None, image_mode="RGB"):
         self.dataframe = dataframe.reset_index(drop=True)
         self.data_dir = data_dir
         self.transform = transform
+        self.image_mode = image_mode
         # Cache the currently open shard and row group
         self._cached_shard = None
         self._cached_pf = None
@@ -55,7 +56,9 @@ class ChestXrayDataset(Dataset):
         image_data = self._cached_table.slice(offset, 1)["image"][0].as_py()
         labels = self._cached_table.slice(offset, 1)["labels"][0].as_py()
         
-        image = Image.open(BytesIO(image_data["bytes"])).convert("RGB")
+        image = Image.open(
+            BytesIO(image_data["bytes"])
+        ).convert(self.image_mode)
         target = torch.zeros(14, dtype=torch.float32)
 
         for label_id in labels:
@@ -65,3 +68,16 @@ class ChestXrayDataset(Dataset):
         if self.transform:
             image = self.transform(image)
         return image, target
+
+class RepeatChannels:
+    def __call__(self, image):
+        return image.repeat(3, 1, 1)
+
+
+class PoissonNoise:
+    def __init__(self, peak=250):
+        self.peak = peak
+
+    def __call__(self, image):
+        noisy = torch.poisson(image * self.peak) / self.peak
+        return noisy.clamp(0, 1)
