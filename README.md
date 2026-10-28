@@ -1,12 +1,28 @@
 # Learning-Medical-Imaging
 
-A personal computer vision project developed alongside [Stanford CS231n](https://cs231n.stanford.edu/), exploring deep learning for medical image analysis.
+A personal project, built alongside Stanford CS231n, on how robust a chest X-ray classifier is to synthetic image noise, and whether brief noise-aware fine-tuning restores performance.
 
-The current project investigates how synthetic Poisson noise affects chest X-ray pathology classification using ResNet-18, and whether noise-aware fine-tuning can recover classification performance as image quality deteriorates.
+Using NIH ChestX-ray14 and an ImageNet-pretrained ResNet-18 (multi-label, 14 findings), I add synthetic Poisson noise at several strengths, measure how macro ROC-AUC degrades, and test whether fine-tuning on noisy images recovers it.
 
-**Research motivation:** Investigate whether deep learning-based chest X-ray classification can remain effective at reduced radiation exposure.
+**Scope.** The noise is a synthetic stand-in for image-quality degradation. It is applied to processed 8-bit radiographs and is **not** calibrated to radiation dose, so this project makes no claims about reduced-dose imaging. Related work that simulates dose reduction with phantom-calibrated noise (Erenstein et al., *J. Imaging* 2025, 11(3), 90) found minimal CNN degradation at mild noise and low input resolution. My mildest noise levels are consistent with that, and my stronger levels go well beyond it.
 
-**Important:** The current experiments use synthetic Poisson noise applied to processed chest radiographs. The noise parameter is not calibrated to radiation dose. These experiments therefore measure robustness to synthetic image degradation, not classification performance at verified reduced radiation doses.
+## Summary of findings
+
+1. **A clean-trained ResNet-18 is brittle to strong noise.** AUC falls gradually from 0.8199 and approaches chance (0.5263) at peak 25. Very mild noise (peak 10,000) changes little.
+2. **Short noise-aware fine-tuning recovers most of the loss.** At peak 250, two epochs raise AUC from 0.6733 to 0.7991, within about 0.02 of the clean baseline. At peak 25, one epoch raises it from 0.5263 to 0.7637.
+3. **Recovery costs clean-image accuracy, and the cost grows with training noise.** Clean AUC drops by about 0.06 after peak-250 fine-tuning and by about 0.17 after peak-25 fine-tuning. The curves cross between peak 2,000 and peak 1,000: above that, the clean-trained model is better.
+4. **The fine-tuned models look specialized to their training noise.** The peak-250 model is nearly flat from clean to peak 1,000 and peaks at 250, and the peak-25 model scores only 0.6847 at peak 250, below the peak-250 model's 0.7991. This suggests, but does not prove, that fine-tuning at one noise level doesn't transfer to others. 
+
+![ResNet-18 robustness to synthetic Poisson noise](src/robustness_curves.png)
+
+## Limitations
+
+- **Synthetic noise, not dose.** Noise is added to processed 8-bit PNGs, not raw detector data. It ignores detector response, scatter, electronic noise, vendor post-processing, and spatially correlated noise, and the source images already contain their own noise. The "peak" values are only meaningful relative to each other, and the results should not be read as feasibility at any radiation dose.
+- **Resolution matters.** Input resolution is `[size]`, and noise is applied `[before/after]` resizing. Downsampling averages noise away, so the same peak value would look different at another resolution. Other work suggests robustness depends strongly on resolution, and I have not tested this.
+- **Dataset issues.** NIH labels were extracted from radiology reports by NLP and are noisy. The Hugging Face mirror I use has its own train/validation/test split, which differs from NIH's official patient-level split, so my numbers are not comparable to published NIH benchmarks. Patient-level separation between splits: `[verified / result]`.
+- **Evaluation limits.** Results come from a single seed on the validation set, without confidence intervals. Differences below roughly 0.01 AUC should be treated as unresolved. Peak-250 fine-tuning also changed the learning rate and added epochs, and a clean-continued control `[has / has not]` been run.
+- **Subgroups untested.** I have not analyzed performance by view position (PA/AP), sex, or age, or tested on an external dataset, so I can't say whether noise robustness matters more or less than other sources of distribution shift.
+- **Not for clinical use.** This is an exploratory learning project and was not validated for any clinical purpose.
 
 ## 1. Learning Resources
 
@@ -222,69 +238,11 @@ python -m src.train_poisson
 
 Before running, verify the input checkpoint, noise peak, and output checkpoint filenames in the training script.
 
-## 7. Evaluation
 
-The primary evaluation metric is macro ROC-AUC across the 14 pathology labels.
-
-### Clean and peak-250 performance
-
-| Model | Clean AUROC | Peak-250 AUROC | Peak-25 AUROC |
-|---|---:|---:|---:|
-| Clean-trained ResNet-18 | 0.8199 | 0.6733 | ~0.5335 |
-| Peak-250 fine-tuned, epoch 4 | 0.7501 | 0.8000 | — |
-| Peak-250 fine-tuned, epoch 5 | 0.7587 | 0.7991 | ~0.67 |
-| Peak-25 fine-tuned, epoch 4 | 0.6489 | 0.6847 | 0.7637 |
-
-Noise-aware fine-tuning substantially improves classification performance under peak-250 corruption, although performance on clean images decreases.
-
-
-### Robustness to Synthetic Poisson Noise
-
-To investigate how image degradation affects classification performance, ResNet-18 was evaluated across seven synthetic Poisson noise conditions.
-
-![ResNet-18 robustness to synthetic Poisson noise](src/robustness_curves.png)
-
-**Key observations:**
-
-1. The clean-trained model achieves the highest AUROC on clean images (0.8199), but performance decreases to 0.5263 at peak 25.
-
-2. Fine-tuning at peak 250 improves performance under severe synthetic noise, reaching 0.7984 AUROC at peak 250 after 2 epochs.
-
-3. Fine-tuning at peak 25 achieves 0.7637 AUROC at peak 25 after just 1 epoch, compared with 0.5263 for the clean-trained model.
-
-4. Noise-specific fine-tuning introduces a trade-off: models perform better near their training noise level but generally perform worse on clean images.
-
-**Interpretation:**
-
-These experiments suggest that ResNet-18 can adapt to substantial synthetic image degradation. The deterioration observed when evaluating the clean-trained model on noisy images does not necessarily imply that all discriminative information has been lost.
-
-However, the synthetic Poisson peak parameter is not calibrated to radiation exposure. These findings demonstrate robustness to simulated noise, not the feasibility of reducing clinical X-ray radiation dose.
-
-**Reproducibility:**
-
-Evaluation uses deterministic noise realizations to support consistent comparisons between model checkpoints.
-
-Run:
-
-```bash
-python -m src.evaluate_poisson
-```
-
-
-## 8. Research Questions
+## 7. Research Questions
 
 The project investigates:
 
 1. How does ResNet-18 classification performance deteriorate as synthetic noise increases?
 2. Can noise-aware fine-tuning recover classification performance under severe image degradation?
 3. How might these findings inform future research on reduced-exposure chest radiography?
-
-## 9. Limitations
-
-The current study uses processed chest radiographs rather than raw detector measurements.
-
-Synthetic Poisson noise applied to processed image intensities does not fully reproduce reduced-exposure radiographic acquisition, including detector response, scatter, electronic noise, and vendor image processing.
-
-The existing results therefore support conclusions about robustness to synthetic noise, not clinical feasibility at specific reduced radiation doses.
-
-The experiments are intended for computer vision learning and exploratory research, not clinical decision-making.
