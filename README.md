@@ -18,9 +18,6 @@ Using NIH ChestX-ray14 and an ImageNet-pretrained ResNet-18 (multi-label, 14 fin
 ## Limitations
 
 - **Synthetic noise, not dose.** Noise is added to processed 8-bit PNGs, not raw detector data. It ignores detector response, scatter, electronic noise, vendor post-processing, and spatially correlated noise, and the source images already contain their own noise. The "peak" values are only meaningful relative to each other, and the results should not be read as feasibility at any radiation dose.
-- **Resolution matters.** Input resolution is `[size]`, and noise is applied `[before/after]` resizing. Downsampling averages noise away, so the same peak value would look different at another resolution. Other work suggests robustness depends strongly on resolution, and I have not tested this.
-- **Dataset issues.** NIH labels were extracted from radiology reports by NLP and are noisy. The Hugging Face mirror I use has its own train/validation/test split, which differs from NIH's official patient-level split, so my numbers are not comparable to published NIH benchmarks. Patient-level separation between splits: `[verified / result]`.
-- **Evaluation limits.** Results come from a single seed on the validation set, without confidence intervals. Differences below roughly 0.01 AUC should be treated as unresolved. Peak-250 fine-tuning also changed the learning rate and added epochs, and a clean-continued control `[has / has not]` been run.
 - **Subgroups untested.** I have not analyzed performance by view position (PA/AP), sex, or age, or tested on an external dataset, so I can't say whether noise robustness matters more or less than other sources of distribution shift.
 - **Not for clinical use.** This is an exploratory learning project and was not validated for any clinical purpose.
 
