@@ -9,9 +9,9 @@ Using NIH ChestX-ray14 and an ImageNet-pretrained ResNet-18 (multi-label, 14 fin
 ## Summary of findings
 
 1. **A clean-trained ResNet-18 is brittle to strong noise.** AUC falls gradually from 0.8199 and approaches chance (0.5263) at peak 25. Very mild noise (peak 10,000) changes little.
-2. **Short noise-aware fine-tuning recovers most of the loss.** At peak 250, two epochs raise AUC from 0.6733 to 0.7991, within about 0.02 of the clean baseline. At peak 25, one epoch raises it from 0.5263 to 0.7637.
-3. **Recovery costs clean-image accuracy, and the cost grows with training noise.** Clean AUC drops by about 0.06 after peak-250 fine-tuning and by about 0.17 after peak-25 fine-tuning. The curves cross between peak 2,000 and peak 1,000: above that, the clean-trained model is better.
-4. **The fine-tuned models look specialized to their training noise.** The peak-250 model is nearly flat from clean to peak 1,000 and peaks at 250, and the peak-25 model scores only 0.6847 at peak 250, below the peak-250 model's 0.7991. This suggests, but does not prove, that fine-tuning at one noise level doesn't transfer to others. 
+2. **Short noise-aware fine-tuning recovers most of the loss.** At peak 250, two epochs raise AUC from 0.6733 to 0.7991, within about 0.02 of the clean baseline. At peak 25, two epochs raise it from 0.5263 to 0.7767.
+3. **Recovery costs clean-image accuracy, and the cost grows with training noise.** Clean AUC drops by about 0.06 after peak-250 fine-tuning and by about 0.15 after peak-25 fine-tuning. The curves cross between peak 2,000 and peak 1,000: above that, the clean-trained model is better. 
+4. **The fine-tuned models look specialized to their training noise.** The peak-250 model is nearly flat from clean to peak 1,000 and peaks at 250, and the peak-25 model scores only 0.6847 at peak 250, below the peak-250 model's 0.7991. This suggests, but does not prove, that fine-tuning transfers imperfectly across noise levels. 
 
 ![ResNet-18 robustness to synthetic Poisson noise](src/robustness_curves.png)
 
@@ -223,7 +223,8 @@ Initialize again from the clean-trained epoch-3 checkpoint and fine-tune directl
 
 **Checkpoint:**
 
-`checkpoints/resnet18_poisson25_epoch_4.pth`
+- `checkpoints/resnet18_poisson25_epoch_4.pth`
+- `checkpoints/resnet18_poisson25_epoch_5.pth`
 
 ### Running training
 
