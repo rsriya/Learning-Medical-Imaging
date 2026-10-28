@@ -242,7 +242,7 @@ Noise-aware fine-tuning substantially improves classification performance under 
 
 To investigate how image degradation affects classification performance, ResNet-18 was evaluated across seven synthetic Poisson noise conditions.
 
-![ResNet-18 robustness to synthetic Poisson noise](results/robustness_curves.png)
+![ResNet-18 robustness to synthetic Poisson noise](src/robustness_curves.png)
 
 **Key observations:**
 
