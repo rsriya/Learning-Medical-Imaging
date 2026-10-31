@@ -13,7 +13,7 @@ Using NIH ChestX-ray14 and an ImageNet-pretrained ResNet-18 (multi-label, 14 fin
 3. **Recovery costs clean-image accuracy, and the cost grows with training noise.** Clean AUC drops by about 0.06 after peak-250 fine-tuning and by about 0.15 after peak-25 fine-tuning. The curves cross between peak 2,000 and peak 1,000: above that, the clean-trained model is better. 
 4. **The fine-tuned models look specialized to their training noise.** The peak-250 model is nearly flat from clean to peak 1,000 and peaks at 250, and the peak-25 model scores only 0.6847 at peak 250, below the peak-250 model's 0.7991. This suggests, but does not prove, that fine-tuning transfers imperfectly across noise levels. 
 
-![ResNet-18 robustness to synthetic Poisson noise](results/robustness_curves.png)
+![ResNet-18 robustness to synthetic Poisson noise](src/robustness_curves.png)
 
 5. **Degradation under synthetic noise was class-dependent**: findings defined by fine texture or thin edges (emphysema, pneumothorax, mass, pleural thickening, nodule) lost roughly 0.2-0.3 AUC, while cardiomegaly, effusion, and edema lost about 0.08-0.13. Fine-tuning at peak 250 restored most of the loss, bringing most classes within about 0.04 of their clean values (hernia, with few positives, was the largest remaining gap).
 
