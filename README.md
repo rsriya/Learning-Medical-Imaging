@@ -252,3 +252,24 @@ The project investigates:
 1. How does ResNet-18 classification performance deteriorate as synthetic noise increases?
 2. Can noise-aware fine-tuning recover classification performance under severe image degradation?
 3. How might these findings inform future research on reduced-exposure chest radiography?
+
+## Side finding: identical clean accuracy, different noise robustness
+
+While adding ResNet-34, I changed the training data sampler, so I retrained ResNet-18 as a control. The sampler (`RowGroupBatchSampler`) builds each batch from images in the same Parquet row group, which makes training batches less random than ordinary shuffling. Everything else was intended to be the same.
+
+| Poisson peak | ResNet-18 (original sampler) | ResNet-18 (new sampler) | ResNet-34 (new sampler) |
+|---|---:|---:|---:|
+| Clean | 0.8199 | 0.8157 | 0.8181 |
+| 10,000 | 0.8103 | 0.7996 | 0.7992 |
+| 500 | 0.7092 | 0.6603 | not run |
+| 250 | 0.6706 | 0.6090 | 0.5981 |
+
+Macro ROC-AUC, validation set, single run per model.
+
+**What this shows**
+- The same architecture and checkpoint recipe lost about 0.06 AUC at peak 250 after the pipeline change, while clean AUC moved by only 0.004. Clean performance did not predict robustness to noise.
+- Under the new pipeline, ResNet-18 and ResNet-34 were nearly indistinguishable at every level (peak 250 difference: −0.011), so I found no evidence that depth matters here.
+- Differences smaller than about 0.06 AUC at peak 250 between models should not be interpreted without repeated seeds, because this pipeline change alone produced a gap of that size.
+
+**What this does not show**
+- I have not isolated the cause. The sampler is the most likely candidate, and a plausible mechanism is that correlated batches distort BatchNorm statistics, but that is a hypothesis, not a measurement.
