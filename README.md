@@ -16,7 +16,7 @@ Both models predict 14 thoracic findings. I evaluate them on clean images and se
 All numbers are macro ROC-AUC on the **validation** set, from single training runs.
 
 | Model | Clean | Peak 250 | 
-|---|---:|---:|---:|
+|---|---:|---:|
 | ResNet-18, clean-trained (3 epochs) | 0.82 | 0.67 | 
 | ResNet-18, fine-tuned at peak 250 (+2 epochs) | 0.76 | 0.80 | 
 | ViT-S/16, clean-trained (5 epochs) | 0.80 | 0.74 |
