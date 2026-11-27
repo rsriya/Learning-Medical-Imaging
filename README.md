@@ -1,76 +1,64 @@
 # Learning-Medical-Imaging
 
-A personal project, built alongside Stanford CS231n, on how robust a chest X-ray classifier is to synthetic image noise, and whether brief noise-aware fine-tuning restores performance.
+A personal medical-imaging deep-learning project developed alongside [Stanford CS231n](https://cs231n.stanford.edu/). I investigate how synthetic Poisson noise affects multi-label chest X-ray classification, and whether noise-aware fine-tuning improves robustness.
 
-Using NIH ChestX-ray14 and an ImageNet-pretrained ResNet-18 (multi-label, 14 findings), I add synthetic Poisson noise at several strengths, measure how macro ROC-AUC degrades, and test whether fine-tuning on noisy images recovers it.
+The project uses NIH ChestX-ray14 and compares two model architectures:
 
-**Scope.** The noise is a synthetic stand-in for image-quality degradation. It is applied to processed 8-bit radiographs and is **not** calibrated to radiation dose, so this project makes no claims about reduced-dose imaging. Related work that simulates dose reduction with phantom-calibrated noise (Erenstein et al., *J. Imaging* 2025, 11(3), 90) found minimal CNN degradation at mild noise and low input resolution. My mildest noise levels are consistent with that, and my stronger levels go well beyond it.
+- **ResNet-18**, a convolutional neural network.
+- **ViT-S/16**, a Vision Transformer initialized from ImageNet-pretrained weights.
+
+Both models predict 14 thoracic findings. I evaluate them on clean images and several levels of synthetic Poisson noise, then examine the effect of fine-tuning on images corrupted at peak 250.
+
+**Scope:** The noise is a synthetic image-degradation experiment. It is added to processed 8-bit radiographs and is not calibrated to radiation dose. The results do not establish performance at reduced X-ray exposure.
 
 ## Summary of findings
 
-1. **A clean-trained ResNet-18 is brittle to strong noise.** AUC falls gradually from 0.8199 and approaches chance (0.5263) at peak 25. Very mild noise (peak 10,000) changes little.
-2. **Short noise-aware fine-tuning recovers most of the loss.** At peak 250, two epochs raise AUC from 0.6733 to 0.7991, within about 0.02 of the clean baseline. At peak 25, two epochs raise it from 0.5263 to 0.7767.
-3. **Recovery costs clean-image accuracy, and the cost grows with training noise.** Clean AUC drops by about 0.06 after peak-250 fine-tuning and by about 0.15 after peak-25 fine-tuning. The curves cross between peak 2,000 and peak 1,000: above that, the clean-trained model is better. 
-4. **The fine-tuned models look specialized to their training noise.** The peak-250 model is nearly flat from clean to peak 1,000 and peaks at 250, and the peak-25 model scores only 0.6847 at peak 250, below the peak-250 model's 0.7991. This suggests, but does not prove, that fine-tuning transfers imperfectly across noise levels. 
+All numbers are macro ROC-AUC on the **validation** set, from single training runs.
 
-![ResNet-18 robustness to synthetic Poisson noise](src/robustness_curves.png)
+| Model | Clean | Peak 250 | 
+|---|---:|---:|---:|
+| ResNet-18, clean-trained (3 epochs) | 0.82 | 0.67 | 
+| ResNet-18, fine-tuned at peak 250 (+2 epochs) | 0.76 | 0.80 | 
+| ViT-S/16, clean-trained (5 epochs) | 0.80 | 0.74 |
+| ViT-S/16, fine-tuned at peak 250 (3 clean + 2 noisy epochs) | 0.80 | 0.80 | 
 
-5. **Degradation under synthetic noise was class-dependent**: findings defined by fine texture or thin edges (emphysema, pneumothorax, mass, pleural thickening, nodule) lost roughly 0.2-0.3 AUC, while cardiomegaly, effusion, and edema lost about 0.08-0.13. Fine-tuning at peak 250 restored most of the loss, bringing most classes within about 0.04 of their clean values (hernia, with few positives, was the largest remaining gap).
+![ResNet-18 and ViT-S/16 robustness to synthetic Poisson noise](results/robustness_curves.png)
 
-![ResNet-18 dependence on Pathology](results/pathology_auroc_peak250.png)
+1. **Both clean-trained models degrade as noise increases, and the ResNet degrades more.** From clean to peak 250, ResNet-18 loses about 0.15 AUC and ViT-S/16 about 0.06. The ResNet is better above roughly peak 2,000, and the ViT is better below it. 
+2. **Fine-tuning at peak 250 recovers most of the loss at that level for both models** (both reach 0.80, close to the clean-trained ResNet's clean AUC of 0.82). 
+3. **The clean-image cost of noise fine-tuning differs sharply.** ResNet-18 loses about 0.06 clean AUC. For ViT-S/16 the cost is negligible against an epoch-matched clean control. The fine-tuned ViT is also flat from clean to peak 250, whereas the fine-tuned ResNet improves as noise approaches its training level.
+4. **More clean training made the ViT less noise-robust.** Going from 3 to 5 clean epochs raised its clean AUC by about 0.01 but lowered its peak-250 AUC by about 0.02.
+5. **Effects are class-dependent.** For the clean-trained ResNet, findings defined by fine texture or thin structures (emphysema, pneumothorax, mass, pleural thickening, nodule) lost about 0.2-0.3 AUC at peak 250, versus about 0.08-0.13 for cardiomegaly, effusion, and edema. These classes also gained and paid the most from fine-tuning. ViT gains were more uniform. See results/Pathology-dependence.png.
+6. **Pipeline sensitivity is large.** Retraining ResNet-18 with a different batch sampler lowered peak-250 AUC by about 0.06. Under that second pipeline, ResNet-34 matched ResNet-18 within about 0.01 at peak 250. Clean accuracy therefore does not reveal robustness, and a robustness gap needs to exceed roughly 0.06 at peak 250 before it can be told apart from pipeline variation. The ResNet curves above come from the original pipeline.
 
-6. Noise-induced degradation (about -0.14 to -0.15 macro AUC) and fine-tuning recovery (about +0.12 to +0.13) were similar across sex and age groups, with between-group differences below what this single-run analysis can resolve.
-
-![ResNet-18 dependence on Demography](results/demographic_macro_auroc.png)
+These are descriptive observations from the configurations tested. They do not show that one architecture is inherently more robust than the other.
 
 ## Limitations
 
-- **Synthetic noise, not dose.** Noise is added to processed 8-bit PNGs, not raw detector data. It ignores detector response, scatter, electronic noise, vendor post-processing, and spatially correlated noise, and the source images already contain their own noise. The "peak" values are only meaningful relative to each other, and the results should not be read as feasibility at any radiation dose.
-- **Subgroups untested.** I have not analyzed performance by view position (PA/AP), sex, or age, or tested on an external dataset, so I can't say whether noise robustness matters more or less than other sources of distribution shift.
+- **Synthetic noise, not dose.** Poisson noise is added to processed 8-bit PNGs, not raw detector data, so detector response, scatter, electronic noise, vendor processing, and spatially correlated noise are not modeled, and the source images already contain noise. Peak values are relative simulation parameters. Relative to a 5,000-photon-peak reference (the convention used by Cohen et al. 2026), peaks 2,000, 1,000, and 250 correspond to photon reductions of 60%, 80%, and 95%. Related work using phantom-calibrated dose simulation found minimal CNN degradation at mild noise and low input resolution (Erenstein et al., *J. Imaging* 2025).
+- **Validation set only.** No test-set results are reported, and checkpoints and noise levels were chosen using validation data.
+- **Architecture is not isolated.** The two models differ in framework, resizing, normalization, optimizer, learning rate, and epoch budget. The ViT weights (`vit_small_patch16_224.augreg_in1k`) are ImageNet-1k, as are the ResNet's, but they come from a different training recipe (AugReg augmentation and regularization), which is known to affect robustness. Differences cannot be attributed to architecture alone.
+- **Single runs.** No repeated seeds or confidence intervals. Pipeline variation alone moved ResNet-18's peak-250 AUC by about 0.06 (finding 6). 
 - **Not for clinical use.** This is an exploratory learning project and was not validated for any clinical purpose.
 
-## 1. Learning Resources
+## 1. Learning resources
 
 - [Stanford CS231n](https://cs231n.stanford.edu/)
-- [Python and NumPy Tutorial](https://cs231n.github.io/python-numpy-tutorial/)
-- [PyTorch Documentation](https://docs.pytorch.org/)
+- [Python and NumPy tutorial](https://cs231n.github.io/python-numpy-tutorial/)
+- [PyTorch documentation](https://docs.pytorch.org/)
+- [timm documentation](https://huggingface.co/docs/timm/)
 
-## 2. Desktop Setup
+## 2. Desktop setup
 
-### Step 1: Install CUDA-enabled PyTorch
-
-Install PyTorch 2.6.0 and torchvision 0.21.0 with CUDA 11.8 support:
+The original development environment used PyTorch 2.6.0 and torchvision 0.21.0 with CUDA 11.8:
 
 ```bash
 python -m pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu118
 ```
 
-### Step 2: Verify GPU access
+Additional dependencies include `timm`, `pandas`, `pyarrow`, `scikit-learn`, and `matplotlib`.
 
-Run the following code in a Python script or Jupyter Notebook:
-
-```python
-import torch
-import torchvision
-
-print("PyTorch:", torch.__version__)
-print("Torchvision:", torchvision.__version__)
-print("CUDA available:", torch.cuda.is_available())
-
-if torch.cuda.is_available():
-    print("GPU:", torch.cuda.get_device_name(0))
-    print(
-        "VRAM (GB):",
-        round(
-            torch.cuda.get_device_properties(0).total_memory / 1024**3,
-            2,
-        ),
-    )
-```
-
-CUDA availability should be `True`.
-
-**Development hardware:**
+Development hardware:
 
 - GPU: NVIDIA RTX A2000 (12 GB VRAM)
 - Operating system: Windows
@@ -78,36 +66,9 @@ CUDA availability should be `True`.
 
 ## 3. Dataset
 
-The project uses the NIH ChestXray14 dataset, accessed through the [chehablab/NIHChestXR](https://huggingface.co/datasets/chehablab/NIHChestXR) Hugging Face repository.
+The project uses NIH ChestX-ray14, accessed through the [chehablab/NIHChestXR](https://huggingface.co/datasets/chehablab/NIHChestXR) Hugging Face repository.
 
-ChestXray14 contains frontal chest radiographs with 14 pathology labels. Because multiple pathologies can occur in the same image, the task is formulated as multi-label classification.
-
-### Step 1: Download the dataset
-
-Create the dataset directory relative to the project root:
-
-```cmd
-mkdir data\data
-cd data\data
-```
-
-Download the six Parquet shards using Windows Command Prompt or Anaconda Prompt:
-
-```cmd
-curl.exe --ssl-revoke-best-effort -L -C - -o train-00000-of-00006.parquet "https://huggingface.co/datasets/chehablab/NIHChestXR/resolve/main/data/train-00000-of-00006.parquet"
-
-curl.exe --ssl-revoke-best-effort -L -C - -o train-00001-of-00006.parquet "https://huggingface.co/datasets/chehablab/NIHChestXR/resolve/main/data/train-00001-of-00006.parquet"
-
-curl.exe --ssl-revoke-best-effort -L -C - -o train-00002-of-00006.parquet "https://huggingface.co/datasets/chehablab/NIHChestXR/resolve/main/data/train-00002-of-00006.parquet"
-
-curl.exe --ssl-revoke-best-effort -L -C - -o train-00003-of-00006.parquet "https://huggingface.co/datasets/chehablab/NIHChestXR/resolve/main/data/train-00003-of-00006.parquet"
-
-curl.exe --ssl-revoke-best-effort -L -C - -o train-00004-of-00006.parquet "https://huggingface.co/datasets/chehablab/NIHChestXR/resolve/main/data/train-00004-of-00006.parquet"
-
-curl.exe --ssl-revoke-best-effort -L -C - -o train-00005-of-00006.parquet "https://huggingface.co/datasets/chehablab/NIHChestXR/resolve/main/data/train-00005-of-00006.parquet"
-```
-
-Return to the project root before running training or evaluation scripts.
+ChestX-ray14 contains frontal chest radiographs with 14 pathology labels. Since an image can contain more than one finding, the task is **multi-label classification**.
 
 ### Dataset splits
 
@@ -117,159 +78,96 @@ Return to the project root before running training or evaluation scripts.
 | Validation | ~10,923 |
 | Test | ~10,941 |
 
-Metadata files contain the Parquet shard, row index, and pathology labels for each image.
+The splits were constructed at the patient level.
 
-Patient-level separation between splits should be verified before drawing research conclusions.
+### Download the dataset
 
-## 4. Classification Model
+Create `data/data` relative to the project root and download the six Parquet shards from the Hugging Face dataset repository:
 
-### Architecture
-
-The baseline model uses ImageNet-pretrained ResNet-18, with its final fully connected layer replaced to predict 14 pathology labels.
-
-```python
-from torch import nn
-from torchvision.models import resnet18, ResNet18_Weights
-
-model = resnet18(
-    weights=ResNet18_Weights.DEFAULT
-)
-
-model.fc = nn.Linear(
-    model.fc.in_features,
-    14
-)
+```cmd
+mkdir data\data
+cd data\data
 ```
+
+The six files are named `train-00000-of-00006.parquet` through `train-00005-of-00006.parquet`.
+
+Return to the project root before running notebooks or scripts.
+
+## 4. Classification task and models
+
+The models output 14 logits, one for each finding:
+
+Atelectasis, Cardiomegaly, Effusion, Infiltration, Mass, Nodule, Pneumonia, Pneumothorax, Consolidation, Edema, Emphysema, Fibrosis, Pleural Thickening, and Hernia.
+
+The loss function is `BCEWithLogitsLoss`. Performance is evaluated using per-pathology ROC-AUC and macro AUROC, calculated as the mean of the pathology-specific AUROCs.
+
+### ResNet-18
+
+The ResNet-18 classifier replaces the final fully connected layer with a 14-output linear layer.
+
+The clean baseline was trained for three epochs. Noise-aware experiments initialized from the clean epoch-3 checkpoint and fine-tuned on synthetically corrupted images.
+
+### ViT-S/16
+
+The Transformer model is `vit_small_patch16_224.augreg_in1k` from [timm](https://huggingface.co/docs/timm/). Its classification head was replaced with a 14-output head.
+
+Input radiographs were resized to 224 × 224 pixels. The ViT was initialized from ImageNet-pretrained weights and fine-tuned for the ChestX-ray14 multi-label task. The peak-250 noise-aware experiment started from a clean-trained checkpoint.
 
 ### Training configuration
 
-| Parameter | Configuration |
-|---|---|
-| Architecture | ResNet-18 |
-| Input | Grayscale chest X-ray repeated across 3 channels |
-| Output | 14 pathology logits |
-| Loss function | BCEWithLogitsLoss |
-| Optimizer | Adam |
-| Initial learning rate | 1e-4 |
-| Noise fine-tuning learning rate | 1e-5 |
-| Batch size | 32 |
-| Baseline training | 3 epochs |
-| Peak-250 fine-tuning | 2 additional epochs |
+| Setting | ResNet-18 | ViT-S/16 |
+|---|---|---|
+| Model source | torchvision | timm |
+| Input | Grayscale repeated to 3 channels | Grayscale resized to 224 × 224, then repeated to 3 channels |
+| Normalization | ImageNet mean and standard deviation | Mean 0.5, standard deviation 0.5 per channel |
+| Output | 14 pathology logits | 14 pathology logits |
+| Loss | BCEWithLogitsLoss | BCEWithLogitsLoss |
+| Optimizer | Adam | AdamW |
+| Batch size | 32 | 32 |
+| Noise-aware fine-tuning | Peak 250 | Peak 250 |
 
-Input images are converted to tensors and normalized using ImageNet mean and standard deviation.
+The two model pipelines are not identical. In particular, image resizing, normalization, initialization, and optimization differ. The comparison is therefore exploratory.
 
-## 5. Synthetic Poisson Noise
+## 5. Synthetic Poisson noise
 
-To investigate robustness under image degradation, synthetic Poisson noise is introduced before ImageNet normalization.
+Noise is applied to grayscale image tensors in the [0, 1] range, before channel repetition and model-specific normalization.
 
-For an input image normalized to the range [0, 1]:
+For an input image \(I\) and synthetic peak parameter \(N\):
 
-$$
-I_{\mathrm{noisy}} =
-\frac{\operatorname{Poisson}(N I)}{N}
-$$
+\[
+I_{\mathrm{noisy}} = \frac{\operatorname{Poisson}(N I)}{N}
+\]
 
-where $N$ is the synthetic Poisson peak parameter.
+Lower peak values produce stronger synthetic noise.
 
-Lower peak values produce stronger noise.
-
-### Noise levels
-
-| Peak | Qualitative interpretation |
-|---|---|
+| Peak | Qualitative description |
+|---:|---|
 | Clean | No synthetic noise |
 | 10,000 | Very mild corruption |
 | 5,000 | Mild corruption |
 | 2,000 | Moderate corruption |
 | 1,000 | Stronger corruption |
-| 250 | Severe corruption |
-| 25 | Extremely severe corruption |
+| 250 | Severe corruption; fine-tuning condition |
 
-These descriptions are qualitative and do not represent calibrated X-ray exposure fractions.
+These descriptions are qualitative. The peak values are not calibrated to X-ray exposure or dose.
 
-### Implementation
+## 6. Experiments and evaluation
 
-The noise transformation is implemented in `src/dataset.py`.
+The evaluation compares clean-trained checkpoints with checkpoints fine-tuned using peak-250 images. Each checkpoint is evaluated on the same seven validation conditions: clean, 10,000, 5,000, 2,000, 1,000, 250, and 25.
 
-```python
-class PoissonNoise:
-    def __init__(self, peak=250):
-        self.peak = peak
+The main questions are:
 
-    def __call__(self, image):
-        noisy = torch.poisson(
-            image * self.peak
-        ) / self.peak
+1. How does multi-label classification performance change as synthetic Poisson noise increases?
+2. Does fine-tuning on noisy images improve performance at and around the noise level used for fine-tuning?
+3. What is the associated trade-off in clean-image performance?
+4. Do the observed trends differ between ResNet-18 and ViT-S/16?
 
-        return noisy.clamp(0, 1)
-```
+### Main observations
 
-## 6. Training Experiments
+- The clean-trained ResNet-18 has a clean validation macro AUROC of approximately **0.82**.
+- At peak 250, both peak-250-fine-tuned models reach approximately **0.80** macro AUROC.
+- The clean-image AUROC reduction after peak-250 fine-tuning is much smaller for ViT-S/16 than for ResNet-18 in the plotted experiment.
 
-### Experiment 1: Clean baseline
+These are descriptive observations from the validation results and should be interpreted in light of the limitations above.
 
-Train ResNet-18 on clean chest X-rays.
-
-**Checkpoint:**
-
-`checkpoints/resnet18_adam_epoch_3.pth`
-
-The baseline achieved a clean validation macro ROC-AUC of **0.8199**.
-
-### Experiment 2: Fine-tuning at peak 250
-
-Initialize from the clean-trained epoch-3 checkpoint and fine-tune using peak-250 synthetic Poisson noise.
-
-**Checkpoints:**
-
-- `checkpoints/resnet18_poisson250_epoch_4.pth`
-- `checkpoints/resnet18_poisson250_epoch_5.pth`
-
-### Experiment 3: Fine-tuning at peak 25
-
-Initialize again from the clean-trained epoch-3 checkpoint and fine-tune directly using peak-25 synthetic Poisson noise.
-
-**Checkpoint:**
-
-- `checkpoints/resnet18_poisson25_epoch_4.pth`
-- `checkpoints/resnet18_poisson25_epoch_5.pth`
-
-### Running training
-
-From the project root:
-
-```bash
-python -m src.train_poisson
-```
-
-Before running, verify the input checkpoint, noise peak, and output checkpoint filenames in the training script.
-
-
-## 7. Research Questions
-
-The project investigates:
-
-1. How does ResNet-18 classification performance deteriorate as synthetic noise increases?
-2. Can noise-aware fine-tuning recover classification performance under severe image degradation?
-3. How might these findings inform future research on reduced-exposure chest radiography?
-
-## Side finding: identical clean accuracy, different noise robustness
-
-While adding ResNet-34, I changed the training data sampler, so I retrained ResNet-18 as a control. The sampler (`RowGroupBatchSampler`) builds each batch from images in the same Parquet row group, which makes training batches less random than ordinary shuffling. Everything else was intended to be the same.
-
-| Poisson peak | ResNet-18 (original sampler) | ResNet-18 (new sampler) | ResNet-34 (new sampler) |
-|---|---:|---:|---:|
-| Clean | 0.8199 | 0.8157 | 0.8181 |
-| 10,000 | 0.8103 | 0.7996 | 0.7992 |
-| 500 | 0.7092 | 0.6603 | not run |
-| 250 | 0.6706 | 0.6090 | 0.5981 |
-
-Macro ROC-AUC, validation set, single run per model.
-
-**What this shows**
-- The same architecture and checkpoint recipe lost about 0.06 AUC at peak 250 after the pipeline change, while clean AUC moved by only 0.004. Clean performance did not predict robustness to noise.
-- Under the new pipeline, ResNet-18 and ResNet-34 were nearly indistinguishable at every level (peak 250 difference: −0.011), so I found no evidence that depth matters here.
-- Differences smaller than about 0.06 AUC at peak 250 between models should not be interpreted without repeated seeds, because this pipeline change alone produced a gap of that size.
-
-**What this does not show**
-- I have not isolated the cause. The sampler is the most likely candidate, and a plausible mechanism is that correlated batches distort BatchNorm statistics, but that is a hypothesis, not a measurement.
+Potential extensions include self-supervised pretraining on unlabeled chest radiographs, label-efficiency experiments, and evaluation on an independent dataset. These are future directions, not results of the current project.
